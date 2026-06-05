@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fikr bildirish - {{ department.hospital.name }}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 480px;
+            width: 100%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .hospital-name {
+            color: #1a73e8;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        h1 { font-size: 22px; color: #202124; margin-bottom: 4px; }
+        .department { color: #5f6368; font-size: 14px; margin-bottom: 24px; }
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #202124;
+            margin-bottom: 6px;
+            margin-top: 16px;
+        }
+        textarea {
+            width: 100%;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 15px;
+            resize: vertical;
+            min-height: 120px;
+            outline: none;
+            font-family: inherit;
+        }
+        textarea:focus { border-color: #1a73e8; }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .tab {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #dadce0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #5f6368;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            border-color: #1a73e8;
+            color: #1a73e8;
+            background: #e8f0fe;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .audio-section { text-align: center; padding: 16px 0; }
+        .record-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: none;
+            background: #1a73e8;
+            color: white;
+            font-size: 32px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+        }
+        .record-btn.recording {
+            background: #d93025;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .record-status {
+            font-size: 14px;
+            color: #5f6368;
+            margin-bottom: 8px;
+        }
+        .record-status.recording { color: #d93025; font-weight: 600; }
+        audio { width: 100%; margin-top: 12px; display: none; }
+        button.submit-btn {
+            width: 100%;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 24px;
+        }
+        button.submit-btn:hover { background: #1557b0; }
+        button.submit-btn:disabled { background: #9aa0a6; cursor: not-allowed; }
+        .success { display: none; text-align: center; padding: 20px; }
+        .success h2 { color: #137333; margin-bottom: 8px; }
+        .success p { color: #5f6368; }
+        .checkmark { font-size: 48px; margin-bottom: 12px; }
+        .anonymous-note {
+            font-size: 12px;
+            color: #80868b;
+            margin-top: 12px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div id="form-section">
+            <div class="hospital-name">{{ department.hospital.name }}</div>
+            <h1>Fikr bildirish</h1>
+            <div class="department">Bo'lim: {{ department.name }}</div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('text')">✏️ Matn</button>
+                <button class="tab" onclick="switchTab('audio')">🎤 Ovoz</button>
+            </div>
+
+            <!-- Matn tab -->
+            <div class="tab-content active" id="tab-text">
+                <label for="text">Fikringiz *</label>
+                <textarea id="text" placeholder="Shifoxona xizmati haqida fikringizni yozing..."></textarea>
+            </div>
+
+            <!-- Ovoz tab -->
+            <div class="tab-content" id="tab-audio">
+                <div class="audio-section">
+                    <button class="record-btn" id="recordBtn" onclick="toggleRecording()">🎤</button>
+                    <div class="record-status" id="recordStatus">Bosing va gapiring</div>
+                    <audio id="audioPlayer" controls></audio>
+                </div>
+            </div>
+
+            <button class="submit-btn" id="submitBtn" onclick="submitFeedback()">Yuborish</button>
+            <p class="anonymous-note">🔒 Fikringiz anonim tarzda yuboriladi</p>
+        </div>
+
+        <div class="success" id="success-section">
+            <div class="checkmark">✅</div>
+            <h2>Rahmat!</h2>
+            <p>Fikringiz muvaffaqiyatli yuborildi.</p>
+        </div>
+    </div>
+
+    <script>
+        let activeTab = 'text'
+        let mediaRecorder = null
+        let audioChunks = []
+        let audioBlob = null
+        let isRecording = false
+
+        function switchTab(tab) {
+            activeTab = tab
+            document.querySelectorAll('.tab').forEach((t, i) => {
+                t.classList.toggle('active', (i === 0 && tab === 'text') || (i === 1 && tab === 'audio'))
+            })
+            document.getElementById('tab-text').classList.toggle('active', tab === 'text')
+            document.getElementById('tab-audio').classList.toggle('active', tab === 'audio')
+        }
+
+        async function toggleRecording() {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+                    audioChunks = []
+                    mediaRecorder = new MediaRecorder(stream)
+                    mediaRecorder.ondataavailable = e => audioChunks.push(e.data)
+                    mediaRecorder.onstop = () => {
+                        audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+                        const url = URL.createObjectURL(audioBlob)
+                        const player = document.getElementById('audioPlayer')
+                        player.src = url
+                        player.style.display = 'block'
+                        stream.getTracks().forEach(t => t.stop())
+                    }
+                    mediaRecorder.start()
+                    isRecording = true
+                    document.getElementById('recordBtn').classList.add('recording')
+                    document.getElementById('recordBtn').textContent = '⏹'
+                    document.getElementById('recordStatus').textContent = 'Yozilmoqda...'
+                    document.getElementById('recordStatus').classList.add('recording')
+                } catch (e) {
+                    alert('Mikrofonga ruxsat berilmadi')
+                }
+            } else {
+                mediaRecorder.stop()
+                isRecording = false
+                document.getElementById('recordBtn').classList.remove('recording')
+                document.getElementById('recordBtn').textContent = '🎤'
+                document.getElementById('recordStatus').textContent = 'Yozib olindi!'
+                document.getElementById('recordStatus').classList.remove('recording')
+            }
+        }
+
+        async function submitFeedback() {
+            const btn = document.getElementById('submitBtn')
+            btn.disabled = true
+            btn.textContent = 'Yuborilmoqda...'
+
+            try {
+                if (activeTab === 'text') {
+                    const text = document.getElementById('text').value.trim()
+                    if (!text) { btn.disabled = false; btn.textContent = 'Yuborish'; return }
+                    const res = await fetch('/api/feedback/submit/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ department_uuid: '{{ department.uuid }}', text })
+                    })
+                    if (res.ok) showSuccess()
+                    else { const e = await res.json(); alert('Xatolik: ' + JSON.stringify(e)) }
+                } else {
+                    if (!audioBlob) { alert('Avval ovoz yozib oling'); btn.disabled = false; btn.textContent = 'Yuborish'; return }
+                    const fd = new FormData()
+                    fd.append('audio', audioBlob, 'audio.webm')
+                    fd.append('department_uuid', '{{ department.uuid }}')
+                    const res = await fetch('/api/feedback/audio/upload/', { method: 'POST', body: fd })
+                    if (res.ok) showSuccess()
+                    else { const e = await res.json(); alert('Xatolik: ' + JSON.stringify(e)) }
+                }
+            } catch (e) {
+                alert('Tarmoq xatosi')
+                btn.disabled = false
+                btn.textContent = 'Yuborish'
+            }
+        }
+
+        function showSuccess() {
+            document.getElementById('form-section').style.display = 'none'
+            document.getElementById('success-section').style.display = 'block'
+        }
+    </script>
+</body>
+</html>
